@@ -104,7 +104,7 @@ namespace garmin
 
   enum region_t : uint8_t
   {
-    None,
+    None = 0,
     UnitedKingdom_Ireland,
     Netherlands,
     France,

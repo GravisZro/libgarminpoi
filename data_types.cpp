@@ -1,49 +1,18 @@
 #include <data_types.h>
 
+#include <type_traits>
+
 namespace garmin
 {
   // typecasted io
-  std::istream& operator>>(std::istream& is, record_id_t& data)
-    { return is >> reinterpret_cast<uint16_t&>(data); }
 
-  std::ostream& operator<<(std::ostream& os, const record_id_t& data)
-    { return os << reinterpret_cast<const uint16_t&>(data); }
+  template <typename T, std::enable_if_t<std::is_enum<T>::value, bool> = true>
+  std::istream& operator>>(std::istream& is, T& data)
+    { return is >> reinterpret_cast<std::underlying_type_t<T>&>(data); }
 
-  std::istream& operator>>(std::istream& is, region_t& data)
-    { return is >> reinterpret_cast<uint16_t&>(data); }
-
-  std::ostream& operator<<(std::ostream& os, const region_t& data)
-    { return os << reinterpret_cast<const uint16_t&>(data); }
-
-  std::istream& operator>>(std::istream& is, codepage_t& data)
-    { return is >> reinterpret_cast<uint16_t&>(data); }
-
-  std::ostream& operator<<(std::ostream& os, const codepage_t& data)
-    { return os << reinterpret_cast<const uint16_t&>(data); }
-
-  std::istream& operator>>(std::istream& is, alert_trigger_t& data)
-    { return is >> reinterpret_cast<uint8_t&>(data); }
-
-  std::ostream& operator<<(std::ostream& os, const alert_trigger_t& data)
-    { return os << reinterpret_cast<const uint8_t&>(data); }
-
-  std::istream& operator>>(std::istream& is, alert_source_t& data)
-    { return is >> reinterpret_cast<uint8_t&>(data); }
-
-  std::ostream& operator<<(std::ostream& os, const alert_source_t& data)
-    { return os << reinterpret_cast<const uint8_t&>(data); }
-
-  std::istream& operator>>(std::istream& is, audio_clips_t& data)
-    { return is >> reinterpret_cast<uint8_t&>(data); }
-
-  std::ostream& operator<<(std::ostream& os, const audio_clips_t& data)
-    { return os << reinterpret_cast<const uint8_t&>(data); }
-
-  std::istream& operator>>(std::istream& is, audio_format_t& data)
-    { return is >> reinterpret_cast<uint8_t&>(data); }
-
-  std::ostream& operator<<(std::ostream& os, const audio_format_t& data)
-    { return os << reinterpret_cast<const uint8_t&>(data); }
+  template <typename T, std::enable_if_t<std::is_enum<T>::value, bool> = true>
+  std::ostream& operator<<(std::ostream& os, T& data)
+    { return os << reinterpret_cast<const std::underlying_type_t<T>&>(data); }
 
   std::istream& operator>>(std::istream& is, flags_t& data)
     { return is >> reinterpret_cast<uint16_t&>(data); }
