@@ -10,7 +10,7 @@
   size_t start = input_pos(is); \
   size_t end = start + data.data_size();
 
-#define ISTREAM_DEBUG_START_EXT \
+#define ISTREAM_DEBUG_START_AUX \
   assert(is.good()); \
   size_t start = input_pos(is); \
   size_t end = start + data.end_of_record;
@@ -50,11 +50,11 @@ namespace garmin
   void parse_records(std::istream& is, record_header_t& data)
   {
     if(is.good() &&
-       data.ext_data_size() &&
+       data.aux_data_size() &&
        data.type != Address &&
        data.type != Contact &&
        data.type != AudioFile)
-      parse_records(is, data, data.ext_data_size());
+      parse_records(is, data, data.aux_data_size());
   }
 
   // enums
@@ -167,7 +167,7 @@ namespace garmin
                   << "  header_flags: " << std::setw(2) << uint16_t(data.header_flags.byte0)
                                         << std::setw(2) << uint16_t(data.header_flags.byte1) << std::endl
                   << "  data size: " << data.data_size() << std::endl
-                  << "  ext data size: " << data.ext_data_size() << std::endl;
+                  << "  aux data size: " << data.aux_data_size() << std::endl;
       }
 
     }
@@ -228,7 +228,7 @@ namespace garmin
               >> data.magic[0] >> data.magic[1] >> data.magic[2] >> data.magic[3] >> data.magic[4] >> data.magic[5]
               >> data.version[0] >> data.version[1]
               >> data.codepage
-              >> data.extended_type;
+              >> data.auxiliary_type;
 
     ISTREAM_DEBUG_END
     return is;
@@ -241,7 +241,7 @@ namespace garmin
               << data.magic[0] << data.magic[1] << data.magic[2] << data.magic[3] << data.magic[4] << data.magic[5]
               << data.version[0] << data.version[1]
               << data.codepage
-              << data.extended_type;
+              << data.auxiliary_type;
   }
 
 
@@ -665,7 +665,7 @@ namespace garmin
 
   std::istream& operator>>(std::istream& is, audio_file_t& data)
   {
-    ISTREAM_DEBUG_START_EXT
+    ISTREAM_DEBUG_START_AUX
 
     is >> data.header()
        >> data.audio_id

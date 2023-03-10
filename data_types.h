@@ -257,11 +257,11 @@ namespace garmin
 
     record_id_t type;
     mutable flags_t header_flags; // seen values: 0, 8 and 0x18
-      // bit3: record has extended data
+      // bit3: record has auxiliary data
       // bit4: Only seen in FileFormat '01' on Header2 and POI Group records. Seems to indicate that record 23 and record 24 are present
 
     uint32_t data_size(void) const { return end_of_data.value_or(end_of_record); }
-    uint32_t ext_data_size(void) const { return end_of_data ? end_of_record - end_of_data.value() : 0; }
+    uint32_t aux_data_size(void) const { return end_of_data ? end_of_record - end_of_data.value() : 0; }
 
     mutable uint32le_t end_of_record;
     mutable std::optional<uint32le_t> end_of_data;
@@ -309,7 +309,7 @@ namespace garmin
     char version[2];  // "00" or "01"
     timestamp_t timestamp;
     flags_t flags;
-      // bit0: obfustication
+      // bit0: obfustication enabled
     vector16_t name;
   };
 
@@ -328,7 +328,7 @@ namespace garmin
     char magic[6];    // "POI\0\0\0"
     char version[2];  // "00" or "01"
     codepage_t codepage;
-    record_id_t extended_type; // 0 for none, 17 for record_t::Copyright type
+    record_id_t auxiliary_type; // 0 for none, 17 for record_t::Copyright type
   };
 
   struct waypoint_t : record_header_t
@@ -343,7 +343,7 @@ namespace garmin
     uint8_t reserved; // 0
 
     flags_t flags;
-      // bit0: could be “Alert record in extra data”
+      // bit0: could be “Alert record in auxiliary data”
       // bit1: unknown
       // bit4: unknown
       // bit8: unknown (always 1)
