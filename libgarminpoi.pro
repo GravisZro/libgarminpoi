@@ -3,7 +3,7 @@ CONFIG += console
 CONFIG += c++17
 CONFIG += strict_c++
 #CONFIG += exceptions_off
-CONFIG += rtti_off
+#CONFIG += rtti_off
 
 CONFIG -= app_bundle
 CONFIG -= qt
@@ -29,11 +29,15 @@ PKGCONFIG += sqlite3
 
 SOURCES += \
         data_types.cpp \
+        endian_types.cpp \
         main.cpp \
+        parsers.cpp \
         simplified/simple_sqlite.cpp
 
 HEADERS += \
   data_types.h \
+  endian_types.h \
+  parsers.h \
   scrapers/utilities.h \
   scrapers/scraper_base.h \
   scrapers/chargehub_scraper.h \
