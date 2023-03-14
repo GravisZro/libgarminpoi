@@ -28,16 +28,16 @@ PKGCONFIG += sqlite3
 
 
 SOURCES += \
-        data_types.cpp \
         endian_types.cpp \
         main.cpp \
         parsers.cpp \
+        record_types.cpp \
         simplified/simple_sqlite.cpp
 
 HEADERS += \
-  data_types.h \
   endian_types.h \
   parsers.h \
+  record_types.h \
   scrapers/utilities.h \
   scrapers/scraper_base.h \
   scrapers/chargehub_scraper.h \

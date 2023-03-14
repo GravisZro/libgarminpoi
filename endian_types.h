@@ -15,7 +15,7 @@ struct endian_ops_t
 
 
 template<typename T>
-struct nativeendian_t : endian_ops_t<T>
+struct native_endian_t : endian_ops_t<T>
 {
   using endian_ops_t<T>::endian_ops_t;
 
@@ -25,16 +25,16 @@ struct nativeendian_t : endian_ops_t<T>
   uint8_t& operator [](const size_t pos)
     { return reinterpret_cast<uint8_t*>(&endian_ops_t<T>::operator T&())[pos]; }
 
-  friend std::istream& operator>>(std::istream& is, nativeendian_t<T>& data)
+  friend std::istream& operator>>(std::istream& is, native_endian_t<T>& data)
     { return is.read(reinterpret_cast<char*>(&data.operator T&()), sizeof(T)); }
 
-  friend std::ostream& operator<<(std::ostream& os, const nativeendian_t<T>& data)
+  friend std::ostream& operator<<(std::ostream& os, const native_endian_t<T>& data)
     { return os.write(reinterpret_cast<const char*>(&data.operator const T&()), sizeof(T)); }
 };
 
 
 template<typename T>
-struct alienendian_t : endian_ops_t<T>
+struct alien_endian_t : endian_ops_t<T>
 {
   using endian_ops_t<T>::endian_ops_t;
 
@@ -44,40 +44,25 @@ struct alienendian_t : endian_ops_t<T>
   uint8_t& operator [](const size_t pos)
     { return reinterpret_cast<uint8_t*>(&endian_ops_t<T>::operator T&())[sizeof(T) - 1 - pos]; }
 
-  template<typename U> friend std::istream& operator>>(std::istream& is,       alienendian_t<U>& data);
-  template<typename U> friend std::ostream& operator<<(std::ostream& os, const alienendian_t<U>& data);
+  template<typename U> friend std::istream& operator>>(std::istream& is,       alien_endian_t<U>& data);
+  template<typename U> friend std::ostream& operator<<(std::ostream& os, const alien_endian_t<U>& data);
 };
 
-extern std::istream& operator>>(std::istream& is,       alienendian_t<uint16_t>& data);
-extern std::ostream& operator<<(std::ostream& os, const alienendian_t<uint16_t>& data);
-extern std::istream& operator>>(std::istream& is,       alienendian_t<uint32_t>& data);
-extern std::ostream& operator<<(std::ostream& os, const alienendian_t<uint32_t>& data);
-extern std::istream& operator>>(std::istream& is,       alienendian_t<uint64_t>& data);
-extern std::ostream& operator<<(std::ostream& os, const alienendian_t<uint64_t>& data);
-
-#if !defined(__cpp_lib_endian) || __cpp_lib_endian < 201907L
-#ifndef __BYTE_ORDER__
-#error compiler does not define endianness macros
-#endif
-namespace std
-{
-  enum class endian
-  {
-    little = __ORDER_LITTLE_ENDIAN__,
-    big    = __ORDER_BIG_ENDIAN__,
-    native = __BYTE_ORDER__,
-  };
-}
-#endif
+extern std::istream& operator>>(std::istream& is,       alien_endian_t<uint16_t>& data);
+extern std::ostream& operator<<(std::ostream& os, const alien_endian_t<uint16_t>& data);
+extern std::istream& operator>>(std::istream& is,       alien_endian_t<uint32_t>& data);
+extern std::ostream& operator<<(std::ostream& os, const alien_endian_t<uint32_t>& data);
+extern std::istream& operator>>(std::istream& is,       alien_endian_t<uint64_t>& data);
+extern std::ostream& operator<<(std::ostream& os, const alien_endian_t<uint64_t>& data);
 
 #ifndef __BYTE_ORDER__
 #error compiler does not define endianness macros
 #elif __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-  template<typename T> using big_endian_t = alienendian_t<T>;
-  template<typename T> using little_endian_t = nativeendian_t<T>;
+  template<typename T> using big_endian_t = alien_endian_t<T>;
+  template<typename T> using little_endian_t = native_endian_t<T>;
 #elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-  template<typename T> using big_endian_t = nativeendian_t<T>;
-  template<typename T> using little_endian_t = alienendian_t<T>;
+  template<typename T> using big_endian_t = native_endian_t<T>;
+  template<typename T> using little_endian_t = alien_endian_t<T>;
 #else
 # error are you compiling for a PDP?!
 #endif

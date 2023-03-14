@@ -1,5 +1,5 @@
-#ifndef DATA_TYPES_H
-#define DATA_TYPES_H
+#ifndef RECORD_TYPES_H
+#define RECORD_TYPES_H
 
 #include <cstdint>
 #include <cstring>
@@ -22,17 +22,11 @@ namespace garmin
     True,
   };
 
-
-  static_assert(sizeof(bool) == 1, "wut?");
-  static_assert(sizeof(std::underlying_type<bool_t>) == 1, "oh snap");
-  static_assert(std::is_same_v<std::underlying_type_t<bool_t>, uint8_t>, "oh snap");
-
-
   enum record_id_t : uint16_t
   {
     GarminHeader = 0,
     POIHeader,
-    Waypoint,
+    Point,
     Alert,
     BitmapReference,
     Bitmap,
@@ -45,31 +39,26 @@ namespace garmin
     Contact,
     ImageFile,
     Description,
-    Record15,  // 15
-    Record16,  // 16
+    Record15,
+    Record16,
     Copyright,
     AudioFile,
     SpeedCamera,
-    Record20, // 20
+    Record20,
     Index,
-    Record22, // 22
-    Record23,  // 23
-    Record24,  // 24
-    Record25, // 25
-    Record26,  // 26
-    Record27,  // 27
+    Record22,
+    Record23,
+    Record24,
+    Record25,
+    Record26,
+    Record27,
 
     // All versions
     End = 0xFFFF,
 
-     // 0 or more of each
-    BitmapSet = 32,
-    CategorySet,
-    AreaSet,
-    POIGroupSet,
-    ImageFileSet,
-    AudioFileSet,
-    WaypointSpeedCameraSet, // set of waypoints or a set of speed cameras
+    // Modifiers
+    Multiple    = 0x1000,
+    Mandatory   = 0x2000,
   };
 
   enum codepage_t : uint16_t
@@ -157,11 +146,11 @@ namespace garmin
   constexpr uint64_t unix_time_offset = 7304 /* days*/ * (24 * 60 * 60 /* seconds per day */); // 631065600 seconds between UNIX epoch (1970-01-01) and Garmin epoch (1989-12-31).
 
 
-  struct flags_t
+  struct [[gnu::packed]] flags_t
   {
     union
     {
-      struct
+      struct [[gnu::packed]]
       {
         uint8_t bit0 : 1;
         uint8_t bit1 : 1;
@@ -177,7 +166,7 @@ namespace garmin
 
     union
     {
-      struct
+      struct [[gnu::packed]]
       {
         uint8_t bit8 : 1;
         uint8_t bit9 : 1;
@@ -191,11 +180,13 @@ namespace garmin
       uint8_t byte1;
     };
   };
+  static_assert(sizeof(flags_t) == sizeof(uint16_t), "packing failure");
 
 
+  struct record_header_t;
   struct garmin_header_t;
   struct poi_header_t;
-  struct waypoint_t;
+  struct point_t;
   struct alert_t;
   struct bitmap_reference_t;
   struct bitmap_t;
@@ -221,9 +212,10 @@ namespace garmin
   struct record25_t;
   struct record26_t;
   struct record27_t;
+  struct end_t;
 
-  using any_record_t = std::variant<garmin_header_t, poi_header_t, waypoint_t, alert_t,
-                                    bitmap_reference_t, bitmap_t, category_reference_t,
+  using any_record_t = std::variant<record_header_t, garmin_header_t, poi_header_t, point_t,
+                                    alert_t, bitmap_reference_t, bitmap_t, category_reference_t,
                                     category_t, area_t, poi_group_t, comment_t, address_t,
                                     contact_t, image_file_t, description_t, record15_t,
                                     record16_t, copyright_t, audio_file_t, speed_camera_t,
@@ -239,7 +231,7 @@ namespace garmin
         end_of_data(header.end_of_data)
     {}
 
-    record_header_t(const record_id_t t = End, std::initializer_list<record_id_t> ct = {})
+    record_header_t(const record_id_t t = End, std::initializer_list<uint16_t> ct = {})
       : type(t),
         end_of_record(UINT32_MAX),
         children_types(ct)
@@ -265,7 +257,7 @@ namespace garmin
 
     mutable uint32le_t end_of_record;
     mutable std::optional<uint32le_t> end_of_data;
-    const std::vector<record_id_t> children_types;
+    const std::vector<uint16_t> children_types;
     std::vector<any_record_t> child_records;
   };
 
@@ -331,10 +323,10 @@ namespace garmin
     record_id_t auxiliary_type; // 0 for none, 17 for record_t::Copyright type
   };
 
-  struct waypoint_t : record_header_t
+  struct point_t : record_header_t
   {
-    waypoint_t(const record_header_t& header) : record_header_t(header) { }
-    waypoint_t(void) : record_header_t(Waypoint, { CategoryReference, BitmapReference, Alert, Comment, Address, Contact, ImageFileSet, Description, Record26 }) { }
+    point_t(const record_header_t& header) : record_header_t(header) { }
+    point_t(void) : record_header_t(Point, { CategoryReference, BitmapReference, Alert, Comment, Address, Contact, Multiple | ImageFile, Description, Record26 }) { }
 
     uint32_t statics_size(void) const { return 11; }
     uint32_t calc_data_size(void) const { return statics_size() + shortname.byte_count(); }
@@ -438,7 +430,7 @@ namespace garmin
   struct area_t : record_header_t
   {
     area_t(const record_header_t& header) : record_header_t(header) { }
-    area_t(void) : record_header_t(Area, { AreaSet, WaypointSpeedCameraSet }) { }
+    area_t(void) : record_header_t(Area, { Multiple | Area, Multiple | Point, Multiple | SpeedCamera }) { }
 
     uint32_t statics_size(void) const { return 23; }
 
@@ -458,7 +450,7 @@ namespace garmin
   struct poi_group_t : record_header_t
   {
     poi_group_t(const record_header_t& header) : record_header_t(header) { }
-    poi_group_t(void) : record_header_t(POIGroup, { CategorySet, BitmapSet, AudioFileSet, Record23, Record24 }) { }
+    poi_group_t(void);
 
     uint32_t calc_data_size(void) const;
 
@@ -483,7 +475,7 @@ namespace garmin
     uint32_t statics_size(void) const { return 2; }
     uint32_t calc_data_size(void) const;
 
-    struct have_t
+    struct [[gnu::packed]] have_t
     {
       uint8_t byte0;
       union
@@ -518,7 +510,7 @@ namespace garmin
     uint32_t statics_size(void) const { return 2; }
     uint32_t calc_data_size(void) const;
 
-    struct have_t
+    struct [[gnu::packed]] have_t
     {
       uint8_t byte0;
       union
@@ -606,20 +598,20 @@ namespace garmin
 
     uint32_t calc_data_size(void) const;
 
-    struct have_t
+    struct [[gnu::packed]] have_t
     {
       union
       {
         struct
         {
-          uint8_t bit00 : 1;
-          uint8_t bit01 : 1;
+          uint8_t seen1 : 1;
+          uint8_t rec23_24 : 1;
           uint8_t bit02 : 1;
           uint8_t bit03 : 1;
-          uint8_t bit04 : 1;
-          uint8_t waypoint_index : 1;
+          uint8_t Unknown30 : 1;
+          uint8_t bit05 : 1;
           uint8_t bit06 : 1;
-          uint8_t seen0: 1;
+          uint8_t speed_camera_records : 1;
         };
         uint8_t byte0;
       };
@@ -627,9 +619,9 @@ namespace garmin
       {
         struct
         {
-          uint8_t image_files : 1;
+          uint8_t bit08 : 1;
           uint8_t bit09 : 1;
-          uint8_t bit0A : 1;
+          uint8_t device_model : 1;
           uint8_t bit0B : 1;
           uint8_t bit0C : 1;
           uint8_t bit0D : 1;
@@ -642,14 +634,14 @@ namespace garmin
       {
         struct
         {
-          uint8_t seen1 : 1;
-          uint8_t rec23_24 : 1;
+          uint8_t image_files : 1;
+          uint8_t bit11 : 1;
           uint8_t bit12 : 1;
           uint8_t bit13 : 1;
-          uint8_t Unknown30 : 1;
+          uint8_t bit14 : 1;
           uint8_t bit15 : 1;
           uint8_t bit16 : 1;
-          uint8_t speed_camera_records : 1;
+          uint8_t bit17 : 1;
         };
         uint8_t byte2;
       };
@@ -659,12 +651,12 @@ namespace garmin
         {
           uint8_t bit18 : 1;
           uint8_t bit19 : 1;
-          uint8_t device_model : 1;
+          uint8_t bit1A : 1;
           uint8_t bit1B : 1;
           uint8_t bit1C : 1;
-          uint8_t bit1D : 1;
+          uint8_t index : 1;
           uint8_t bit1E : 1;
-          uint8_t bit1F : 1;
+          uint8_t bit1F: 1;
         };
         uint8_t byte3;
       };
@@ -688,7 +680,7 @@ namespace garmin
     };
     std::vector<image_file_data_t> image_files; // always 12 image_file_data_t types?
 
-    std::optional<uint16le_t> Unknown30;
+    std::optional<uint32le_t> Unknown30;
   };
 
   struct audio_file_t : record_header_t
@@ -745,7 +737,7 @@ namespace garmin
   struct record23_t : record_header_t
   {
     record23_t(const record_header_t& header) : record_header_t(header) { }
-    record23_t(void) : record_header_t(Record23) { }
+    record23_t(void) : record_header_t(Record23, { Multiple | Bitmap }) { }
   };
 
 
@@ -781,4 +773,4 @@ namespace garmin
 
 } // namespace garmin
 
-#endif // DATA_TYPES_H
+#endif // RECORD_TYPES_H

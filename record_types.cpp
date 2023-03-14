@@ -1,4 +1,4 @@
-﻿#include <data_types.h>
+﻿#include <record_types.h>
 
 #include <cassert>
 
@@ -21,7 +21,7 @@ namespace garmin
     {
       case GarminHeader:      return record_size<garmin_header_t      >(data);
       case POIHeader:         return record_size<poi_header_t         >(data);
-      case Waypoint:          return record_size<waypoint_t           >(data);
+      case Point:             return record_size<point_t              >(data);
       case Alert:             return record_size<alert_t              >(data);
       case BitmapReference:   return record_size<bitmap_reference_t   >(data);
       case Bitmap:            return record_size<bitmap_t             >(data);
@@ -69,6 +69,8 @@ namespace garmin
         (palette_data.size() * sizeof(uint32_t)) +
         mask_data.size();
   }
+
+  poi_group_t::poi_group_t(void) : record_header_t(POIGroup, { Multiple | CategoryReference, Multiple | BitmapReference, Multiple | AudioFile, Record23, Record24 }) { }
 
   uint32_t poi_group_t::calc_data_size(void) const
   {

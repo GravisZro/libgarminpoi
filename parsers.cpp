@@ -16,26 +16,30 @@
   size_t end = start + data.end_of_record;
 
 #define ISTREAM_DEBUG_END \
-  size_t pos = is.tellg(); \
+  size_t pos = input_pos(is); \
   if(pos < end) \
   { \
-    std::cout << uint32_t(end - pos) << " bytes not parsed in type " << uint32_t(data.type) << std::endl; \
+    std::cout << std::hex \
+              << "record start: 0x" << std::setw(8) << start << std::endl \
+              << "record pos:   0x" << std::setw(8) << pos << std::endl \
+              << "record end:   0x" << std::setw(8) << end << std::endl \
+              << std::dec << uint32_t(end - pos) << " bytes not parsed in type " << uint32_t(data.type) << std::endl << std::hex; \
     is.seekg(end - pos, std::ios_base::cur); \
   } \
   else { assert(pos == end); }
 
 namespace garmin
 {
-  // helpers
+// generic Read/Write function pairs
 
   static size_t input_pos (std::istream& is) { return size_t(is.tellg()); }
-  //static size_t output_pos(std::ostream& os) { return size_t(os.tellp()); }
+  static size_t output_pos(std::ostream& os) { return size_t(os.tellp()); }
 
-  void parse_records(std::istream& is, record_header_t& data, ssize_t bytes_remaining)
+  void read_child_records(std::istream& is, record_header_t& data, ssize_t bytes_remaining)
   {
-    static uint32_t depth = 0;
-    ++depth;
-    std::cout << "lowering to depth: " << std::to_string(depth) << std::endl;
+    static uint32_t read_depth = 0;
+    ++read_depth;
+//    std::cout << "lowering to depth: " << std::to_string(depth) << std::endl;
     while(bytes_remaining > 0)
     {
       assert(is.good());
@@ -43,21 +47,162 @@ namespace garmin
       is >> data.child_records.emplace_back();
       bytes_remaining -= input_pos(is) - before;
     }
-    --depth;
-    std::cout << "raising to depth: " << std::to_string(depth) << std::endl;
+    --read_depth;
+//    std::cout << "raising to depth: " << std::to_string(depth) << std::endl;
   }
 
-  void parse_records(std::istream& is, record_header_t& data)
+  void write_child_records(std::ostream& os, const record_header_t& data, ssize_t bytes_remaining)
+  {
+    static uint32_t write_depth = 0;
+    ++write_depth;
+    auto pos = std::begin(data.child_records);
+    const auto end = std::end(data.child_records);
+    while(bytes_remaining > 0)
+    {
+      assert(os.good() && pos != end);
+      size_t before = output_pos(os);
+      os << *pos;
+      pos++;
+      bytes_remaining -= output_pos(os) - before;
+    }
+    --write_depth;
+  }
+
+
+  void read_child_records(std::istream& is, record_header_t& data)
   {
     if(is.good() &&
        data.aux_data_size() &&
        data.type != Address &&
        data.type != Contact &&
        data.type != AudioFile)
-      parse_records(is, data, data.aux_data_size());
+      read_child_records(is, data, data.aux_data_size());
   }
 
-  // enums
+  void write_child_records(std::ostream& os, const record_header_t& data)
+  {
+    if(os.good() &&
+       data.aux_data_size() &&
+       data.type != Address &&
+       data.type != Contact &&
+       data.type != AudioFile)
+      write_child_records(os, data, data.aux_data_size());
+  }
+
+
+  template<typename T>
+  void read_record(std::istream& is, T& data)
+  {
+    /*
+    std::cout << std::hex
+              << "header pos: 0x" << std::setw(8) << uint32_t(input_pos(is) - data.header_size()) << std::endl
+              << "record pos: 0x" << std::setw(8) << input_pos(is) << std::endl;
+              */
+//      std::cout << "header pos: " << std::setw(4) << uint32_t(input_pos(is) - record_header.header_size()) << std::endl;
+//      std::cout << "record pos: " << std::setw(4) << input_pos(is) << std::endl;
+    is >> data;
+//    std::cout << "end pos: " << std::setw(4) << input_pos(is) << std::endl;
+    read_child_records(is, data);
+  }
+
+  template<typename T>
+  void write_record(std::ostream& os, const T& data)
+  {
+//      std::cout << "header pos: " << std::setw(4) << uint32_t(output_pos(os) - record_header.header_size()) << std::endl;
+//      std::cout << "record pos: " << std::setw(4) << output_pos(os)) << std::endl;
+    os << data;
+//    std::cout << "end pos: " << std::setw(4) << output_pos(os) << std::endl;
+    write_child_records(os, data);
+  }
+
+
+  std::istream& operator>>(std::istream& is, any_record_t& data)
+  {
+    record_header_t record_header;
+    if((is >> record_header).good())
+    {
+      switch(record_header.type)
+      {
+        case GarminHeader:      read_record(is, data.emplace<garmin_header_t      >(record_header)); break;
+        case POIHeader:         read_record(is, data.emplace<poi_header_t         >(record_header)); break;
+        case Point:             read_record(is, data.emplace<point_t              >(record_header)); break;
+        case Alert:             read_record(is, data.emplace<alert_t              >(record_header)); break;
+        case BitmapReference:   read_record(is, data.emplace<bitmap_reference_t   >(record_header)); break;
+        case Bitmap:            read_record(is, data.emplace<bitmap_t             >(record_header)); break;
+        case CategoryReference: read_record(is, data.emplace<category_reference_t >(record_header)); break;
+        case Category:          read_record(is, data.emplace<category_t           >(record_header)); break;
+        case Area:              read_record(is, data.emplace<area_t               >(record_header)); break;
+        case POIGroup:          read_record(is, data.emplace<poi_group_t          >(record_header)); break;
+        case Comment:           read_record(is, data.emplace<comment_t            >(record_header)); break;
+        case Address:           read_record(is, data.emplace<address_t            >(record_header)); break;
+        case Contact:           read_record(is, data.emplace<contact_t            >(record_header)); break;
+        case ImageFile:         read_record(is, data.emplace<image_file_t         >(record_header)); break;
+        case Description:       read_record(is, data.emplace<description_t        >(record_header)); break;
+        case Record15:          read_record(is, data.emplace<record15_t           >(record_header)); break;
+        case Record16:          read_record(is, data.emplace<record16_t           >(record_header)); break;
+        case Copyright:         read_record(is, data.emplace<copyright_t          >(record_header)); break;
+        case AudioFile:         read_record(is, data.emplace<audio_file_t         >(record_header)); break;
+        case SpeedCamera:       read_record(is, data.emplace<speed_camera_t       >(record_header)); break;
+        case Record20:          read_record(is, data.emplace<record20_t           >(record_header)); break;
+        case Index:             read_record(is, data.emplace<index_t              >(record_header)); break;
+        case Record22:          read_record(is, data.emplace<record22_t           >(record_header)); break;
+        case Record23:          read_record(is, data.emplace<record23_t           >(record_header)); break;
+        case Record24:          read_record(is, data.emplace<record24_t           >(record_header)); break;
+        case Record25:          read_record(is, data.emplace<record25_t           >(record_header)); break;
+        case Record26:          read_record(is, data.emplace<record26_t           >(record_header)); break;
+        case Record27:          read_record(is, data.emplace<record27_t           >(record_header)); break;
+        case End:               read_record(is, data.emplace<record_header_t      >(record_header));
+          is.setstate(std::ios_base::failbit); // not an error, just finished reading records
+          break;
+        default:
+          assert(false);
+      }
+    }
+    return is;
+  } // end function
+
+  std::ostream& operator<<(std::ostream& os, const any_record_t& data)
+  {
+    switch(data.index())
+    {
+      case GarminHeader:      write_record(os, std::get<garmin_header_t      >(data)); break;
+      case POIHeader:         write_record(os, std::get<poi_header_t         >(data)); break;
+      case Point:             write_record(os, std::get<point_t              >(data)); break;
+      case Alert:             write_record(os, std::get<alert_t              >(data)); break;
+      case BitmapReference:   write_record(os, std::get<bitmap_reference_t   >(data)); break;
+      case Bitmap:            write_record(os, std::get<bitmap_t             >(data)); break;
+      case CategoryReference: write_record(os, std::get<category_reference_t >(data)); break;
+      case Category:          write_record(os, std::get<category_t           >(data)); break;
+      case Area:              write_record(os, std::get<area_t               >(data)); break;
+      case POIGroup:          write_record(os, std::get<poi_group_t          >(data)); break;
+      case Comment:           write_record(os, std::get<comment_t            >(data)); break;
+      case Address:           write_record(os, std::get<address_t            >(data)); break;
+      case Contact:           write_record(os, std::get<contact_t            >(data)); break;
+      case ImageFile:         write_record(os, std::get<image_file_t         >(data)); break;
+      case Description:       write_record(os, std::get<description_t        >(data)); break;
+      case Record15:          write_record(os, std::get<record15_t           >(data)); break;
+      case Record16:          write_record(os, std::get<record16_t           >(data)); break;
+      case Copyright:         write_record(os, std::get<copyright_t          >(data)); break;
+      case AudioFile:         write_record(os, std::get<audio_file_t         >(data)); break;
+      case SpeedCamera:       write_record(os, std::get<speed_camera_t       >(data)); break;
+      case Record20:          write_record(os, std::get<record20_t           >(data)); break;
+      case Index:             write_record(os, std::get<index_t              >(data)); break;
+      case Record22:          write_record(os, std::get<record22_t           >(data)); break;
+      case Record23:          write_record(os, std::get<record23_t           >(data)); break;
+      case Record24:          write_record(os, std::get<record24_t           >(data)); break;
+      case Record25:          write_record(os, std::get<record25_t           >(data)); break;
+      case Record26:          write_record(os, std::get<record26_t           >(data)); break;
+      case Record27:          write_record(os, std::get<record27_t           >(data)); break;
+      case End:               write_record(os, std::get<record_header_t      >(data));
+        os.setstate(std::ios_base::failbit); // not an error, just finished reading records
+        break;
+      default:
+        assert(false);
+    }
+    return os;
+  }
+
+// enumeration Read/Write function pairs
 
   template <typename T, std::enable_if_t<std::is_enum_v<T> && std::is_same_v<std::underlying_type_t<T>, uint8_t>, bool> = true>
   std::istream& operator>>(std::istream& is, T& data)
@@ -83,7 +228,7 @@ namespace garmin
   std::ostream& operator<<(std::ostream& os, const T& data)
     { return os << uint16le_t(data); }
 
-  // helper types
+// shortcut type Read/Write function pairs
   std::istream& operator>>(std::istream& is, flags_t& data)
     { return is >> data.byte0 >> data.byte1; }
 
@@ -144,8 +289,7 @@ namespace garmin
   }
 
 
-  // record header helpers
-
+// record header Read/Write function pair
   std::istream& operator>>(std::istream& is, record_header_t& data)
   {
     assert(is.good());
@@ -162,12 +306,14 @@ namespace garmin
 
       if(is.good())
       {
+        /*
         std::cout << "data:" << std::endl
                   << "  type: " << std::to_string(uint16_t(data.type)) << std::endl
                   << "  header_flags: " << std::setw(2) << uint16_t(data.header_flags.byte0)
                                         << std::setw(2) << uint16_t(data.header_flags.byte1) << std::endl
                   << "  data size: " << data.data_size() << std::endl
                   << "  aux data size: " << data.aux_data_size() << std::endl;
+                  */
       }
 
     }
@@ -191,7 +337,7 @@ namespace garmin
               << data.end_of_data;
   }
 
-  // record io
+// specialized record Read/Write function pairs
   std::istream& operator>>(std::istream& is, garmin_header_t& data)
   {
     ISTREAM_DEBUG_START
@@ -245,7 +391,7 @@ namespace garmin
   }
 
 
-  std::istream& operator>>(std::istream& is, waypoint_t& data)
+  std::istream& operator>>(std::istream& is, point_t& data)
   {
     ISTREAM_DEBUG_START
 
@@ -259,7 +405,7 @@ namespace garmin
     return is;
   }
 
-  std::ostream& operator<<(std::ostream& os, const waypoint_t& data)
+  std::ostream& operator<<(std::ostream& os, const point_t& data)
   {
     data.end_of_data = data.calc_data_size();
     return os << data.header()
@@ -479,7 +625,7 @@ namespace garmin
     is >> data.header()
        >> data.source;
 
-    parse_records(is, data, data.data_size() - data.source.byte_count());
+    read_child_records(is, data, data.data_size() - data.source.byte_count());
     for(auto& area : data.child_records)
       data.areas.emplace_back(std::get<area_t>(area));
     data.child_records.clear();
@@ -779,194 +925,98 @@ namespace garmin
     return os;
   }
 
-  std::istream& operator>>(std::istream& is, index_t& data)
+  std::istream& debug_read_record(std::istream& is, record_header_t& data)
   {
-    assert(is.good());
+    is >> data;
     is.seekg(data.end_of_record, std::ios_base::cur);
     return is;
   }
 
+  std::ostream& debug_write_record(std::ostream& os, const record_header_t& data)
+  {
+    os << data;
+    os.seekp(data.end_of_record, std::ios_base::cur);
+    return os;
+  }
+
+  std::istream& operator>>(std::istream& is, index_t& data)
+  {
+    return debug_read_record(is, data.header());
+  }
+
   std::ostream& operator<<(std::ostream& os, const index_t& data)
   {
-    (void)data;
-    return os;
+    return debug_write_record(os, data.header());
   }
 
 
   std::istream& operator>>(std::istream& is, record20_t& data)
   {
-    assert(is.good());
-    is.seekg(data.end_of_record, std::ios_base::cur);
-    return is;
+    return debug_read_record(is, data.header());
   }
 
   std::ostream& operator<<(std::ostream& os, const record20_t& data)
   {
-    (void)data;
-    return os;
+    return debug_write_record(os, data.header());
   }
 
   std::istream& operator>>(std::istream& is, record22_t& data)
   {
-    assert(is.good());
-    is.seekg(data.end_of_record, std::ios_base::cur);
-    return is;
+    return debug_read_record(is, data.header());
   }
 
   std::ostream& operator<<(std::ostream& os, const record22_t& data)
   {
-    (void)data;
-    return os;
+    return debug_write_record(os, data.header());
   }
 
   std::istream& operator>>(std::istream& is, record23_t& data)
   {
-    assert(is.good());
-    is.seekg(data.end_of_record, std::ios_base::cur);
-    return is;
+    return debug_read_record(is, data.header());
   }
 
   std::ostream& operator<<(std::ostream& os, const record23_t& data)
   {
-    (void)data;
-    return os;
+    return debug_write_record(os, data.header());
   }
 
   std::istream& operator>>(std::istream& is, record24_t& data)
   {
-    assert(is.good());
-    is.seekg(data.end_of_record, std::ios_base::cur);
-    return is;
+    return debug_read_record(is, data.header());
   }
 
   std::ostream& operator<<(std::ostream& os, const record24_t& data)
   {
-    (void)data;
-    return os;
+    return debug_write_record(os, data.header());
   }
 
   std::istream& operator>>(std::istream& is, record25_t& data)
   {
-    assert(is.good());
-    is.seekg(data.end_of_record, std::ios_base::cur);
-    return is;
+    return debug_read_record(is, data.header());
   }
 
   std::ostream& operator<<(std::ostream& os, const record25_t& data)
   {
-    (void)data;
-    return os;
+    return debug_write_record(os, data.header());
   }
 
   std::istream& operator>>(std::istream& is, record26_t& data)
   {
-    assert(is.good());
-    is.seekg(data.end_of_record, std::ios_base::cur);
-    return is;
+    return debug_read_record(is, data.header());
   }
 
   std::ostream& operator<<(std::ostream& os, const record26_t& data)
   {
-    (void)data;
-    return os;
+    return debug_write_record(os, data.header());
   }
 
   std::istream& operator>>(std::istream& is, record27_t& data)
   {
-    assert(is.good());
-    is.seekg(data.end_of_record, std::ios_base::cur);
-    return is;
+    return debug_read_record(is, data.header());
   }
 
   std::ostream& operator<<(std::ostream& os, const record27_t& data)
   {
-    (void)data;
-    return os;
-  }
-
-
-  std::istream& operator>>(std::istream& is, any_record_t& data)
-  {
-    record_header_t record_header;
-    if((is >> record_header).good())
-    {
-      std::cout << "header pos: " << std::setw(4) << uint32_t(uint32_t(is.tellg()) - record_header.header_size()) << std::endl;
-      std::cout << "record pos: " << std::setw(4) << uint32_t(is.tellg()) << std::endl;
-
-      switch(record_header.type)
-      {
-        case GarminHeader:      is >> data.emplace<garmin_header_t      >(record_header); break;
-        case POIHeader:         is >> data.emplace<poi_header_t         >(record_header); break;
-        case Waypoint:          is >> data.emplace<waypoint_t           >(record_header); break;
-        case Alert:             is >> data.emplace<alert_t              >(record_header); break;
-        case BitmapReference:   is >> data.emplace<bitmap_reference_t   >(record_header); break;
-        case Bitmap:            is >> data.emplace<bitmap_t             >(record_header); break;
-        case CategoryReference: is >> data.emplace<category_reference_t >(record_header); break;
-        case Category:          is >> data.emplace<category_t           >(record_header); break;
-        case Area:              is >> data.emplace<area_t               >(record_header); break;
-        case POIGroup:          is >> data.emplace<poi_group_t          >(record_header); break;
-        case Comment:           is >> data.emplace<comment_t            >(record_header); break;
-        case Address:           is >> data.emplace<address_t            >(record_header); break;
-        case Contact:           is >> data.emplace<contact_t            >(record_header); break;
-        case ImageFile:         is >> data.emplace<image_file_t         >(record_header); break;
-        case Description:       is >> data.emplace<description_t        >(record_header); break;
-        case Record15:          is >> data.emplace<record15_t           >(record_header); break;
-        case Record16:          is >> data.emplace<record16_t           >(record_header); break;
-        case Copyright:         is >> data.emplace<copyright_t          >(record_header); break;
-        case AudioFile:         is >> data.emplace<audio_file_t         >(record_header); break;
-        case SpeedCamera:       is >> data.emplace<speed_camera_t       >(record_header); break;
-        case Record20:          is >> data.emplace<record20_t           >(record_header); break;
-        case Index:             is >> data.emplace<index_t              >(record_header); break;
-        case Record22:          is >> data.emplace<record22_t           >(record_header); break;
-        case Record23:          is >> data.emplace<record23_t           >(record_header); break;
-        case Record24:          is >> data.emplace<record24_t           >(record_header); break;
-        case Record25:          is >> data.emplace<record25_t           >(record_header); break;
-        case Record26:          is >> data.emplace<record26_t           >(record_header); break;
-        case Record27:          is >> data.emplace<record27_t           >(record_header); break;
-        default:
-          break;
-      }
-      std::cout << "end pos: " << std::setw(4) << is.tellg() << std::endl;
-      parse_records(is, record_header);
-    }
-    return is;
-  } // end function
-
-  std::ostream& operator<<(std::ostream& os, const any_record_t& data)
-  {
-    switch(data.index())
-    {
-      case GarminHeader:      os << std::get<garmin_header_t      >(data); break;
-      case POIHeader:         os << std::get<poi_header_t         >(data); break;
-      case Waypoint:          os << std::get<waypoint_t           >(data); break;
-      case Alert:             os << std::get<alert_t              >(data); break;
-      case BitmapReference:   os << std::get<bitmap_reference_t   >(data); break;
-      case Bitmap:            os << std::get<bitmap_t             >(data); break;
-      case CategoryReference: os << std::get<category_reference_t >(data); break;
-      case Category:          os << std::get<category_t           >(data); break;
-      case Area:              os << std::get<area_t               >(data); break;
-      case POIGroup:          os << std::get<poi_group_t          >(data); break;
-      case Comment:           os << std::get<comment_t            >(data); break;
-      case Address:           os << std::get<address_t            >(data); break;
-      case Contact:           os << std::get<contact_t            >(data); break;
-      case ImageFile:         os << std::get<image_file_t         >(data); break;
-      case Description:       os << std::get<description_t        >(data); break;
-      case Record15:          os << std::get<record15_t           >(data); break;
-      case Record16:          os << std::get<record16_t           >(data); break;
-      case Copyright:         os << std::get<copyright_t          >(data); break;
-      case AudioFile:         os << std::get<audio_file_t         >(data); break;
-      case SpeedCamera:       os << std::get<speed_camera_t       >(data); break;
-      case Record20:          os << std::get<record20_t           >(data); break;
-      case Index:             os << std::get<index_t              >(data); break;
-      case Record22:          os << std::get<record22_t           >(data); break;
-      case Record23:          os << std::get<record23_t           >(data); break;
-      case Record24:          os << std::get<record24_t           >(data); break;
-      case Record25:          os << std::get<record25_t           >(data); break;
-      case Record26:          os << std::get<record26_t           >(data); break;
-      case Record27:          os << std::get<record27_t           >(data); break;
-      default:
-        break;
-    }
-    return os;
+    return os << data.header();
   }
 }

@@ -1,12 +1,16 @@
 #ifndef PARSERS_H
 #define PARSERS_H
 
-#include "data_types.h"
+#include "record_types.h"
 #include <cassert>
 
 
 namespace garmin
 {
+  std::istream& operator>>(std::istream& is, any_record_t& data);
+  std::ostream& operator<<(std::ostream& os, const any_record_t& data);
+
+
   template<typename type>
   std::istream& operator>>(std::istream& is, std::optional<type>& data)
   {
@@ -81,8 +85,8 @@ namespace garmin
   std::istream& operator>>(std::istream& is, poi_header_t& data);
   std::ostream& operator<<(std::ostream& os, const poi_header_t& data);
 
-  std::istream& operator>>(std::istream& is, waypoint_t& data);
-  std::ostream& operator<<(std::ostream& os, const waypoint_t& data);
+  std::istream& operator>>(std::istream& is, point_t& data);
+  std::ostream& operator<<(std::ostream& os, const point_t& data);
 
   std::istream& operator>>(std::istream& is, alert_t& data);
   std::ostream& operator<<(std::ostream& os, const alert_t& data);
@@ -134,12 +138,6 @@ namespace garmin
 
   std::istream& operator>>(std::istream& is, index_t& data);
   std::ostream& operator<<(std::ostream& os, const index_t& data);
-
-
-
-  std::istream& operator>>(std::istream& is, any_record_t& data);
-  std::ostream& operator<<(std::ostream& os, const any_record_t& data);
-
 } // namespace garmin
 
 #endif // PARSERS_H

@@ -12,7 +12,7 @@
 
 #include <simplified/simple_sqlite.h>
 
-#include <data_types.h>
+#include <record_types.h>
 #include <parsers.h>
 
 
@@ -41,6 +41,14 @@ int main(int argc, char* argv[])
       std::vector<garmin::any_record_t> records;
       while(file.good())
         file >> records.emplace_back();
+      // ignore index if there is one
+      /*
+      if(file.fail())
+      {
+        file.clear();
+        uint32le_t bytes = 0;
+      }
+      */
 
       file.close();
     }
